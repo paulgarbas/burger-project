@@ -4,6 +4,7 @@ import Burger from '../../hoc/Layout/Burger/Burger';
 import BuildControls from '../../hoc/Layout/Burger/BuildControls/BuildControls';
 import Modal from '../../components/UI/Modal/Modal'; 
 import OrderSummary from '../../hoc/Layout/Burger/OrderSummary/OrderSummary';
+import Spinner from '../../components/UI/Spinner/Spinner';
 import axios from '../../axios-orders';
 
 const INGREDIENT_PRICES = {
@@ -15,15 +16,18 @@ const INGREDIENT_PRICES = {
 
 class BurgerBuilder extends Component {
     state = {
-        ingredients: {
-            salad: 0,
-            bacon: 0,
-            cheese: 0,
-            meat: 0
-        }, 
+        ingredients: null, 
         totalPrice: 4,
         purchasable: false,
-        purchasing: false
+        purchasing: false,
+        loading: false
+    }
+
+    componentDidMount() {
+        axios.get('https://react-my-burger-e16ef.firebaseio.com/ingredients.json')
+            .then(response => {
+                this.setState({ingredients: response.data});
+            });
     }
 
     updatePurchaseState (ingredients) {
@@ -77,6 +81,7 @@ class BurgerBuilder extends Component {
 
     purchaseContinueHandler = () => {
         // return alert("You continue!");
+        this.setState({ loading: true });
         const order = {
             ingredients: this.state.ingredients,
             price: this.state.totalPrice,
@@ -93,8 +98,12 @@ class BurgerBuilder extends Component {
         };
         
         axios.post('/orders.json', order)
-            .then(response => console.log(response))
-            .catch(error => console.log(error));  
+            .then(response => {
+                this.setState({ loading: false, purchasing: false })
+            })
+            .catch(error => {
+                this.setState({ loading: false, purchasing: false })
+            });  
     }
 
     render() {
@@ -106,27 +115,48 @@ class BurgerBuilder extends Component {
             disabledInfo[key] = disabledInfo[key] <= 0;
         }
 
+        let orderSummary = null;
+
+        if (this.state.loading) {
+            orderSummary = <Spinner />;
+        }
+
+        let burger = <Spinner />;
+        
+        if (this.state.ingredients) {
+            burger = (
+                <Auxiliary>
+                    <Burger ingredients={this.state.ingredients} />               
+                    <BuildControls 
+                        ingredientAdded={this.addIngredientHandler}
+                        ingredientRemoved={this.removeIngredientHandler}
+                        disabled={disabledInfo}
+                        purchasable={this.state.purchasable}
+                        ordered={this.purchaseHandler}
+                        price={this.state.totalPrice} />
+                    </Auxiliary>
+            );
+            
+            orderSummary = <OrderSummary 
+            price={this.state.totalPrice}
+            ingredients={this.state.ingredients}
+            purchaseCancelled={this.purchaseCancleHandler}
+            purchaseContinued={this.purchaseContinueHandler} />;
+        }
+        
+        if (this.state.loading) {
+            orderSummary = <Spinner />;
+        }
+
         return (
             <Auxiliary>
                 <Modal 
                     show={this.state.purchasing}
                     modalClosed={this.purchaseCancleHandler}>
-                        <OrderSummary 
-                            price={this.state.totalPrice}
-                            ingredients={this.state.ingredients}
-                            purchaseCancelled={this.purchaseCancleHandler}
-                            purchaseContinued={this.purchaseContinueHandler} />
+                    {orderSummary}
                 </Modal>
+                {burger}
                 
-                <Burger ingredients={this.state.ingredients} />
-                
-                <BuildControls 
-                    ingredientAdded={this.addIngredientHandler}
-                    ingredientRemoved={this.removeIngredientHandler}
-                    disabled={disabledInfo}
-                    purchasable={this.state.purchasable}
-                    ordered={this.purchaseHandler}
-                    price={this.state.totalPrice} />
             </Auxiliary>
         )
     }
